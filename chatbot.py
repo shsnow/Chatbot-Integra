@@ -10,6 +10,10 @@ from typing_extensions import TypedDict
 from nodes import chatbot_with_welcome_msg, human_node, maybe_exit_human_node, OrderState
 import dotenv, os
 import google.generativeai as genai
+#from langgraph.config import set_config
+
+
+#set_config("recursion_limit", 50)  # Aumentar el límite a 50
 
 # Cargar variables de entorno
 dotenv.load_dotenv()
@@ -85,6 +89,20 @@ def qa(input_data):
     else:
         return {"answer": "Lo siento, no entendí tu solicitud."}
 
+def build_chat_graph():
+    """Construye el grafo del chatbot con manejo adecuado del estado END."""
+    graph_builder = StateGraph(OrderState)
+
+    # Nodos
+    graph_builder.add_node("chatbot", chatbot_with_welcome_msg)
+    graph_builder.add_node("human", human_node)
+
+    # Transiciones
+    graph_builder.add_edge(START, "chatbot")
+    graph_builder.add_edge("chatbot", "human")
+    graph_builder.add_conditional_edges("human", maybe_exit_human_node)
+
+    return graph_builder.compile()
 
 def generate_graph_image():
     """

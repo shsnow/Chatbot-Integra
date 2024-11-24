@@ -22,7 +22,7 @@ for msg in st.session_state["messages"]:
 
 # Entrada del usuario
 if prompt := st.chat_input("¿En qué te puedo ayudar?"):
-    # Mostrar la entrada del usuario
+    # Agregar mensaje del usuario
     st.session_state["messages"].append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -35,6 +35,11 @@ if prompt := st.chat_input("¿En qué te puedo ayudar?"):
         with st.spinner("🧠 Pensando..."):
             result = qa({"question": prompt, "chat_history": st.session_state["history"]})
             assistant_response = result["answer"]
+
+            # Manejo del estado final
+            if assistant_response.lower() == "end":
+                st.markdown("Gracias por usar el soporte técnico. ¡Adiós!")
+                st.stop()  # Detener Streamlit
 
         # Mostrar la respuesta progresivamente
         for word in assistant_response.split(" "):

@@ -81,13 +81,21 @@ def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
     unresolved = ["no me sirvió", "quiero hablar con un técnico", "no resuelto"]
     technical_question = ["pregunta técnica", "tecnica", "cómo hago", "cómo funciona"]
 
-    user_message = state["messages"][-1].content.lower()  # Accede directamente al contenido
+    # Asegúrate de que hay mensajes en el estado
+    if not state["messages"]:
+        return "chatbot"
+
+    # Obtener el último mensaje del usuario
+    user_message = state["messages"][-1].content.lower()
 
     if any(word in user_message for word in resolved):
+        state["finished"] = True  # Marcar la conversación como terminada
         return END
     elif any(word in user_message for word in unresolved):
+        state["finished"] = True  # Marcar la conversación como terminada
         return END
     elif any(word in user_message for word in technical_question):
         return "chatbot"
     else:
         return "chatbot"
+
