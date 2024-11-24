@@ -7,7 +7,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 import dotenv, os
 import google.generativeai as genai
-
+from db import validate_rut, create_ticket, update_ticket
 # Cargar variables de entorno
 dotenv.load_dotenv()
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
@@ -81,18 +81,38 @@ def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
     unresolved = ["no me sirvió", "quiero hablar con un técnico", "no resuelto"]
     technical_question = ["pregunta técnica", "tecnica", "cómo hago", "cómo funciona"]
 
-    # Asegúrate de que hay mensajes en el estado
-    if not state["messages"]:
-        return "chatbot"
+    # Validar si el RUT ya fue capturado
+    if "rut" not in state:
+        last_message = state["messages"][-1].content.lower()
+        if validate_rut(last_message):  # Validar RUT en la base de datos
+            state["rut"] = last_message
+            state["messages"].append(AIMessage(content="¡RUT válido! ¿En qué puedo ayudarte?"))
+            return "chatbot"
+        else:
+            state["messages"].append(AIMessage(content="RUT no válido. Intenta nuevamente."))
+            return "human"
 
     # Obtener el último mensaje del usuario
     user_message = state["messages"][-1].content.lower()
 
     if any(word in user_message for word in resolved):
-        state["finished"] = True  # Marcar la conversación como terminada
+        create_ticket(
+            rut=state["rut"],
+            descripcion="Problema resuelto por el chatbot",
+            estado="Resuelto",
+            asignacion="Chatbot"
+        )
+        state["finished"] = True
+        state["messages"].append(AIMessage(content="Ticket resuelto y guardado en la base de datos."))
         return END
     elif any(word in user_message for word in unresolved):
-        state["finished"] = True  # Marcar la conversación como terminada
+        update_ticket(
+            rut=state["rut"],
+            estado="Pendiente",
+            asignacion="Técnico Nivel 2"
+        )
+        state["finished"] = True
+        state["messages"].append(AIMessage(content="Ticket asignado a un Técnico Nivel 2."))
         return END
     elif any(word in user_message for word in technical_question):
         return "chatbot"
