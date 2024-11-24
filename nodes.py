@@ -9,6 +9,8 @@ import dotenv,os
 from langgraph.graph.message import add_messages
 from typing import Literal
 from prompts import *
+from chatbot import *
+
 
 # Autenticación de la API de Google Gemini
 dotenv.load_dotenv()
@@ -78,20 +80,24 @@ def chatbotDes(state: OrderState) -> OrderState:
 
 def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
     """Route to the chatbot, unless it looks like the user is exiting."""
+    resolved = ["muchas gracias", "gracias", "se arreglo", "solucionado", "resuelto", "resolved"]
+    unresolved = ["no me sirvio", "no me ayudo", "no me arreglo", "no se arreglo", "no se soluciono", "no se resolvio", "unresolved"]
+    technical_question = ["pregunta tecnica", "tecnica", "tecnico", "tecnologia", "technical question", "no entiendo", "no se", "no comprendo", "no entendi", "no comprendi", "no entendi", "no comprendi", "no entiendo", "como hago"," como se hace", "como funciona", "como se usa", "como se instala"]
     if state.get("finished", False):
         return END
     else:
         user_message = state["messages"][-1].content
-        classification = user_message.lower()# isar un modelo para transformar todas las resspuestas a una de esas 3 salidas que se piden
-        if "resolved" in classification:
+        classification = user_message.lower()# usar un modelo para transformar todas las resspuestas a una de esas 3 salidas que se piden 
+        if any(word in classification for word in resolved):
             print("Nos alegra saber que pudimos ayudarte. ¡Gracias por usar nuestro servicio!")
             #cerrar el ticket
             return END
-        elif "unresolved" in classification:
+        elif any(word in classification for word in unresolved):
             print("Lamentamos que no hayamos podido ayudarte. Te conectaremos con otro técnico.")
             #derivar el ticket a un tecnico nivel 2
             return END
-        elif "technical question" in classification:
+        elif any(word in classification for word in technical_question):
+            print("Entiendo que tienes una pregunta técnica. Te responderé lo mejor que pueda.")
             return "chatbot"
         else:
             return "chatbot"
