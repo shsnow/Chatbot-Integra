@@ -1,103 +1,93 @@
-
-from typing import Annotated
+# nodes.py
+from typing import Annotated, Literal
 from typing_extensions import TypedDict
-import google.generativeai as genai
-from langchain_core.messages.ai import AIMessage
 from langgraph.graph import StateGraph, START, END
-from langchain_google_genai import ChatGoogleGenerativeAI
-import dotenv,os
 from langgraph.graph.message import add_messages
-from typing import Literal
-from prompts import *
-from chatbot import *
+from langchain_core.messages.ai import AIMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+import dotenv, os
+import google.generativeai as genai
 
-
-# Autenticación de la API de Google Gemini
+# Cargar variables de entorno
 dotenv.load_dotenv()
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 genai.configure(api_key=GOOGLE_API_KEY)
 
+# Configurar los modelos LLM
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest")
 llmdes = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest")
-#message_history = [CLASSIFICATION_PROMPT] + state["messages"]
-#llm.invoke(message_history)]}
+
+# Variables de entorno
+WELCOME_MSG = os.getenv("WELCOME_MSG", "Bienvenidos soy el chatbot de soporte técnico nivel 1, ¿en qué puedo ayudarte hoy?")
+CLASSIFICATION_PROMPT = os.getenv("CLASSIFICATION_PROMPT", "¿Se ha resuelto tu problema? Si es así, responde 'muchas gracias'. Si no es así, responde 'no me sirvió'. Si deseas hablar con un técnico de nivel 2, por favor, responde 'quiero hablar con un técnico de nivel 2'. Si respondes 'muchas gracias' o algo relacionado, el chatbot responde 'resolved'. Si respondes 'no me sirvió' o deseas un técnico de nivel 2, el chatbot responde 'unresolved'. Si tienes una pregunta técnica, el chatbot responde 'technical question'.")
+
+# Definir el mensaje inicial del chatbot
+CHATBOT_TECNICHIAN = (
+    "system",
+    "Eres un técnico nivel 1 especializado en soporte técnico básico. "
+    "Una de las características principales del soporte de nivel 1 es su enfoque en la eficiencia y rapidez. "
+    "Los problemas abordados en este nivel suelen resolverse en poco tiempo, permitiendo a la organización manejar un alto volumen de consultas diarias. "
+    "Si el problema no puede resolverse en este nivel, el caso se deriva al nivel 2, donde técnicos con mayor experiencia y conocimientos más avanzados se encargan de investigarlo y solucionarlo. "
+    "La principal cualidad asociada a los técnicos de nivel 1 es que son generalistas del soporte de IT, ya que conocen los fundamentos de la asistencia de la mayoría (si no de todos) los servicios utilizados por la empresa. "
+    "Esto les permite resolver gran parte de los problemas, liberando a los niveles 2 para fallos más complicados. "
+    "Proporciona asistencia técnica al usuario final a través de los canales del help desk (teléfono, correo electrónico, Teams o web chat). "
+    "Resuelve problemas técnicos. "
+    "Se despide formalmente!"
+)
 
 class OrderState(TypedDict):
     """State representing the customer's order conversation."""
-
-    # The chat conversation. This preserves the conversation history
-    # between nodes. The `add_messages` annotation indicates to LangGraph
-    # that state is updated by appending returned messages, not replacing
-    # them.
     messages: Annotated[list, add_messages]
-
-    # The customer's in-progress order.
     order: list[str]
-
-    # Flag indicating that the order is placed and completed.
     finished: bool
- 
 
-def human_node(state: OrderState) -> OrderState:
-    """Display the last model message to the user, and receive the user's input."""
-    last_msg = state["messages"][-1]
-    print("Model:", last_msg.content)
-
-    user_input = input("Usuario: ")
-
-    # If it looks like the user is trying to quit, flag the conversation
-    # as over.
-    if user_input in {"q", "quit", "exit", "goodbye"}:
-        state["finished"] = True
-
-    return state | {"messages": [("user", user_input)]}
-
+# Funciones de los nodos de interacción
 
 def chatbot_with_welcome_msg(state: OrderState) -> OrderState:
-    """The chatbot itself. A wrapper around the model's own chat interface."""
-
+    """Nodo inicial del chatbot con mensaje de bienvenida."""
     if state["messages"]:
-        # If there are messages, continue the conversation with the Gemini model.
+        # Continuar la conversación con el modelo Gemini
         new_output = llm.invoke([CHATBOT_TECNICHIAN] + state["messages"])
     else:
-        # If there are no messages, start with the welcome message.
+        # Iniciar con el mensaje de bienvenida
         new_output = AIMessage(content=WELCOME_MSG)
 
     return state | {"messages": [new_output]}
 
 def chatbotDes(state: OrderState) -> OrderState:
-    """The chatbot itself. A wrapper around the model's own chat interface."""
-
+    """Nodo del chatbot con lógica de clasificación."""
     if state["messages"]:
-        # If there are messages, continue the conversation with the Gemini model.
+        # Continuar la conversación con el modelo Gemini usando el prompt de clasificación
         new_output = llmdes.invoke([CLASSIFICATION_PROMPT] + state["messages"])
     else:
-        # If there are no messages, start with the welcome message.
+        # Iniciar con el mensaje de bienvenida
         new_output = AIMessage(content=WELCOME_MSG)
 
     return state | {"messages": [new_output]}
 
+def human_node(state: OrderState) -> OrderState:
+    """Nodo de interacción con el usuario."""
+    last_msg = state["messages"][-1]  # Último mensaje
+    user_input = last_msg.content  # Accede directamente al contenido
+
+    if user_input.lower() in {"q", "quit", "exit", "goodbye"}:
+        state["finished"] = True
+
+    return state | {"messages": [("user", user_input)]}
 
 def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
-    """Route to the chatbot, unless it looks like the user is exiting."""
-    resolved = ["muchas gracias", "gracias", "se arreglo", "solucionado", "resuelto", "resolved"]
-    unresolved = ["no me sirvio", "no me ayudo", "no me arreglo", "no se arreglo", "no se soluciono", "no se resolvio", "unresolved"]
-    technical_question = ["pregunta tecnica", "tecnica", "tecnico", "tecnologia", "technical question", "no entiendo", "no se", "no comprendo", "no entendi", "no comprendi", "no entendi", "no comprendi", "no entiendo", "como hago"," como se hace", "como funciona", "como se usa", "como se instala"]
-    if state.get("finished", False):
+    """Decidir la próxima acción basada en la respuesta del usuario."""
+    resolved = ["muchas gracias", "gracias", "solucionado", "resuelto"]
+    unresolved = ["no me sirvió", "quiero hablar con un técnico", "no resuelto"]
+    technical_question = ["pregunta técnica", "tecnica", "cómo hago", "cómo funciona"]
+
+    user_message = state["messages"][-1].content.lower()  # Accede directamente al contenido
+
+    if any(word in user_message for word in resolved):
         return END
+    elif any(word in user_message for word in unresolved):
+        return END
+    elif any(word in user_message for word in technical_question):
+        return "chatbot"
     else:
-        user_message = state["messages"][-1].content
-        classification = user_message.lower()# usar un modelo para transformar todas las resspuestas a una de esas 3 salidas que se piden 
-        if any(word in classification for word in resolved):
-            print("Nos alegra saber que pudimos ayudarte. ¡Gracias por usar nuestro servicio!")
-            #cerrar el ticket
-            return END
-        elif any(word in classification for word in unresolved):
-            print("Lamentamos que no hayamos podido ayudarte. Te conectaremos con otro técnico.")
-            #derivar el ticket a un tecnico nivel 2
-            return END
-        elif any(word in classification for word in technical_question):
-            print("Entiendo que tienes una pregunta técnica. Te responderé lo mejor que pueda.")
-            return "chatbot"
-        else:
-            return "chatbot"
+        return "chatbot"
