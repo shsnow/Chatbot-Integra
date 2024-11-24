@@ -16,7 +16,7 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 genai.configure(api_key=GOOGLE_API_KEY)
 
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest")
-#llmdes = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest")
+llmdes = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest")
 #message_history = [CLASSIFICATION_PROMPT] + state["messages"]
 #llm.invoke(message_history)]}
 
@@ -63,17 +63,26 @@ def chatbot_with_welcome_msg(state: OrderState) -> OrderState:
 
     return state | {"messages": [new_output]}
 
+def chatbotDes(state: OrderState) -> OrderState:
+    """The chatbot itself. A wrapper around the model's own chat interface."""
+
+    if state["messages"]:
+        # If there are messages, continue the conversation with the Gemini model.
+        new_output = llmdes.invoke([CLASSIFICATION_PROMPT] + state["messages"])
+    else:
+        # If there are no messages, start with the welcome message.
+        new_output = AIMessage(content=WELCOME_MSG)
+
+    return state | {"messages": [new_output]}
+
 
 def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
     """Route to the chatbot, unless it looks like the user is exiting."""
     if state.get("finished", False):
         return END
     else:
-        print("Model:", state["messages"][-1])
-        #print(CLASSIFICATION_PROMPT)
-        #last_message_content = state["messages"][-1].content
-        classification = llm.invoke([CLASSIFICATION_PROMPT] + state["messages"])
-        print("Model:", classification.content)
+        user_message = state["messages"][-1].content
+        classification = user_message.lower()# isar un modelo para transformar todas las resspuestas a una de esas 3 salidas que se piden
         if "resolved" in classification:
             print("Nos alegra saber que pudimos ayudarte. ¡Gracias por usar nuestro servicio!")
             #cerrar el ticket
@@ -86,5 +95,3 @@ def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
             return "chatbot"
         else:
             return "chatbot"
-        return "chatbot"
-
