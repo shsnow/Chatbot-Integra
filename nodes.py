@@ -1,4 +1,3 @@
-# nodes.py
 from typing import Annotated, Literal
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
@@ -8,6 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 import dotenv, os
 import google.generativeai as genai
 from db import validate_rut, create_ticket, update_ticket
+
 # Cargar variables de entorno
 dotenv.load_dotenv()
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
@@ -41,45 +41,35 @@ class OrderState(TypedDict):
     order: list[str]
     finished: bool
 
-# Funciones de los nodos de interacción
-
+# Nodo inicial del chatbot con mensaje de bienvenida
 def chatbot_with_welcome_msg(state: OrderState) -> OrderState:
-    """Nodo inicial del chatbot con mensaje de bienvenida."""
     if state["messages"]:
-        # Continuar la conversación con el modelo Gemini
         new_output = llm.invoke([CHATBOT_TECNICHIAN] + state["messages"])
     else:
-        # Iniciar con el mensaje de bienvenida
         new_output = AIMessage(content=WELCOME_MSG)
-
     return state | {"messages": [new_output]}
 
+# Nodo para lógica de clasificación
 def chatbotDes(state: OrderState) -> OrderState:
-    """Nodo del chatbot con lógica de clasificación."""
     if state["messages"]:
-        # Continuar la conversación con el modelo Gemini usando el prompt de clasificación
         new_output = llmdes.invoke([CLASSIFICATION_PROMPT] + state["messages"])
     else:
-        # Iniciar con el mensaje de bienvenida
         new_output = AIMessage(content=WELCOME_MSG)
-
     return state | {"messages": [new_output]}
 
+# Nodo humano
 def human_node(state: OrderState) -> OrderState:
-    """Nodo de interacción con el usuario."""
-    last_msg = state["messages"][-1]  # Último mensaje
-    user_input = last_msg.content  # Accede directamente al contenido
-
+    last_msg = state["messages"][-1]
+    user_input = last_msg.content
     if user_input.lower() in {"q", "quit", "exit", "goodbye"}:
         state["finished"] = True
-
     return state | {"messages": [("user", user_input)]}
 
+# Nodo de salida condicional
 def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
-    """Decidir la próxima acción basada en la respuesta del usuario."""
     resolved = ["muchas gracias", "gracias", "solucionado", "resuelto"]
     unresolved = ["no me sirvió", "quiero hablar con un técnico", "no resuelto"]
-    technical_question = ["pregunta técnica", "tecnica", "cómo hago", "cómo funciona"]
+    technical_question = ["pregunta técnica", "técnica", "cómo hago", "cómo funciona"]
 
     # Validar si el RUT ya fue capturado
     if "rut" not in state:
@@ -92,30 +82,19 @@ def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
             state["messages"].append(AIMessage(content="RUT no válido. Intenta nuevamente."))
             return "human"
 
-    # Obtener el último mensaje del usuario
     user_message = state["messages"][-1].content.lower()
 
     if any(word in user_message for word in resolved):
-        create_ticket(
-            rut=state["rut"],
-            descripcion="Problema resuelto por el chatbot",
-            estado="Resuelto",
-            asignacion="Chatbot"
-        )
+        create_ticket(state["rut"], "Problema resuelto", estado="Resuelto", asignacion="Chatbot")
         state["finished"] = True
-        state["messages"].append(AIMessage(content="Ticket resuelto y guardado en la base de datos."))
+        state["messages"].append(AIMessage(content="Ticket resuelto y guardado."))
         return END
     elif any(word in user_message for word in unresolved):
-        update_ticket(
-            rut=state["rut"],
-            estado="Pendiente",
-            asignacion="Técnico Nivel 2"
-        )
+        update_ticket(state["rut"], estado="Pendiente", asignacion="Técnico Nivel 2")
         state["finished"] = True
-        state["messages"].append(AIMessage(content="Ticket asignado a un Técnico Nivel 2."))
+        state["messages"].append(AIMessage(content="Ticket asignado a Técnico Nivel 2."))
         return END
     elif any(word in user_message for word in technical_question):
         return "chatbot"
     else:
         return "chatbot"
-
