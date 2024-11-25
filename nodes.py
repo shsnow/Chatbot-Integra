@@ -74,8 +74,11 @@ def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
 
     if "rut" not in state or not state["rut"]:
         state["rut"] = "20.404.282-9"  # RUT de prueba
-
+    #user_message = state["messages"][-1]["content"].lower()
+    #print(f"User message: {user_message}")
+    #print(f"User message??: {state['messages']["user"][-1]}")
     user_message = state["messages"][-1].content.lower()
+    print(f"User message: {user_message}")
     # Verificamos si el usuario quiere resolver el ticket
     if any(word in user_message for word in resolved):
         print("Usuario reportó que su problema fue resuelto.")
