@@ -6,7 +6,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 import dotenv, os
 import google.generativeai as genai
-from db import create_ticket, update_ticket
+from db import create_ticket, update_ticket, get_user_id_by_rut
 
 # Cargar variables de entorno
 dotenv.load_dotenv()
@@ -67,18 +67,30 @@ def human_node(state: OrderState) -> OrderState:
 
 def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
     """Decidir la próxima acción basada en la respuesta del usuario."""
-    resolved = ["muchas gracias", "gracias", "solucionado", "resuelto"]
+    #resolved = ["muchas gracias", "gracias", "solucionado", "resuelto", "me sirvió", "me ayudó","me funcionó"]
+    resolved = ["muchas gracias", "gracias"]
     unresolved = ["no me sirvió", "quiero hablar con un técnico", "no resuelto"]
     technical_question = ["pregunta técnica", "técnica", "cómo hago", "cómo funciona"]
 
     if "rut" not in state or not state["rut"]:
-        state["rut"] = 12345678  # RUT de prueba
+        state["rut"] = "20.404.282-9"  # RUT de prueba
 
     user_message = state["messages"][-1].content.lower()
     # Verificamos si el usuario quiere resolver el ticket
     if any(word in user_message for word in resolved):
+        print("Usuario reportó que su problema fue resuelto.")
         # Crear un ticket con el estado 'Resuelto'
-        create_ticket(state["rut"], "Problema resuelto", estado="Resuelto", asignacion="Chatbot")
+        userId = get_user_id_by_rut(state["rut"])
+        #create_ticket(rut, title, description, category_id, state_id, sla_id, user_id=None, asignacion="Chatbot"):
+        create_ticket(
+            rut=state["rut"],
+            title="Problema Resuelto",
+            description="El usuario reportó que su problema fue solucionado.",
+            category_id=1,  # Ajusta según la categoría predeterminada
+            state_id=2,     # Estado 'Resuelto'
+            sla_id=1,       # SLA predeterminado
+            user_id=userId,   # ID del usuario (opcional)
+            )
         state["finished"] = True
         state["messages"].append(AIMessage(content="Ticket resuelto y guardado."))
         return END  # Finalizamos la interacción
@@ -86,7 +98,17 @@ def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
     # Si el usuario quiere escalar el ticket
     elif any(word in user_message for word in unresolved):
         # Actualizar el ticket y asignarlo a un Técnico Nivel 2
-        update_ticket(state["rut"], estado="Pendiente", asignacion="Administrador")
+        userId = get_user_id_by_rut(state["rut"])
+        #create_ticket(rut, title, description, category_id, state_id, sla_id, user_id=None, asignacion="Chatbot"):
+        create_ticket(
+            rut=state["rut"],
+            title="Problema Resuelto",
+            description="El usuario reportó que su problema fue solucionado.",
+            category_id=1,  # Ajusta según la categoría predeterminada
+            state_id=1,     # Estado 'abierto'
+            sla_id=1,       # SLA predeterminado
+            user_id=userId,   # ID del usuario (opcional)
+            )
         state["finished"] = True
         state["messages"].append(AIMessage(content="Ticket asignado a Técnico Nivel 2."))
         print("Ticket asignado a Técnico Nivel 2.")

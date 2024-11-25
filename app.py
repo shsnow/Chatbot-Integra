@@ -22,7 +22,7 @@ if not st.session_state["rut"]:
             if validate_rut(rut_input):  # Si el RUT es válido
                 st.session_state["rut"] = rut_input  # Guardamos el RUT
                 st.success("¡RUT válido! Puedes continuar al chat.")
-                st.experimental_rerun()  # Esto recarga la página y pasa al chat
+                st.rerun()  # Reiniciar la aplicación para mostrar el chat
             else:
                 st.error("RUT no válido. Intenta nuevamente.")
         except Exception as e:
@@ -34,19 +34,17 @@ else:
             st.markdown(msg["content"])
 
     # Entrada del usuario para hacer preguntas al chatbot
-    prompt = st.chat_input("¿En qué te puedo ayudar?")
-    
-    if prompt:
-        # Limitar el número de mensajes para enviar al modelo
+    if prompt := st.chat_input("¿En qué te puedo ayudar?"):
+        # Agregar el mensaje del usuario al historial
         st.session_state["messages"].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         # Spinner mientras esperamos la respuesta del chatbot
         with st.chat_message("assistant"):
-            with st.spinner("Procesando..."):  # Spinner de carga
+            with st.spinner("Procesando..."):
                 try:
-                    # Solo enviar los últimos 5 mensajes para evitar latencia
+                    # Obtener solo los últimos 5 mensajes para enviar al modelo
                     chat_history = st.session_state["messages"][-5:]
 
                     # Obtener respuesta del chatbot
@@ -56,7 +54,7 @@ else:
                         "rut": st.session_state["rut"]  # Pasar el RUT al chatbot
                     })
 
-                    # Obtener la respuesta y mostrarla
+                    # Mostrar respuesta del chatbot
                     reply = response.get("answer", "Lo siento, no pude procesar tu solicitud.")
                     st.markdown(reply)
                     st.session_state["messages"].append({"role": "assistant", "content": reply})
@@ -65,6 +63,3 @@ else:
                     error_msg = f"Error al procesar la solicitud: {e}"
                     st.error(error_msg)
                     st.session_state["messages"].append({"role": "assistant", "content": error_msg})
-
-    # Refrescar la interfaz
-    st.experimental_rerun()  # Esto recarga la página para reflejar el estado actualizado

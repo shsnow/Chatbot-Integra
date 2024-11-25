@@ -86,8 +86,13 @@ def show_tickets(rut):
     else:
         print(f"No se encontraron tickets asociados al RUT {rut}.")
 # Crear un ticket
-def create_ticket(rut, title, description, category_id, state_id, sla_id, asignacion="Chatbot"):
-    """Crea un nuevo ticket en la base de datos usando el clientId asociado al RUT."""
+from datetime import datetime
+
+def create_ticket(rut, title, description, category_id, state_id, sla_id, user_id=None, asignacion="Chatbot"):
+    """
+    Crea un nuevo ticket en la base de datos usando el clientId asociado al RUT.
+    También permite opcionalmente incluir un userId.
+    """
     # Obtener el clientId correspondiente al RUT
     query_client_id = "SELECT id FROM \"Clients\" WHERE rut = %s"
     conn = None
@@ -107,10 +112,22 @@ def create_ticket(rut, title, description, category_id, state_id, sla_id, asigna
                 
                 # Crear el ticket utilizando el clientId
                 query_create_ticket = """
-                INSERT INTO "Tickets" (title, description, estado_ticket, asignacion, clientId, categoryId, stateId, slaId, createdAt, updatedAt)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO "Tickets" ("title", "description", "createdAt", "updatedAt", "userId", "categoryId", "stateId", "slaId", "clientId")
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
-                cursor.execute(query_create_ticket, (title, description, "En progreso", asignacion, client_id, category_id, state_id, sla_id, datetime.now(), datetime.now()))
+                
+                # Si no se proporciona un userId, insertar como NULL
+                cursor.execute(query_create_ticket, (
+                    title,
+                    description,
+                    datetime.now(),  # Fecha de creación
+                    datetime.now(),  # Fecha de actualización
+                    user_id,         # Puede ser NULL si no se especifica
+                    category_id,
+                    state_id,
+                    sla_id,
+                    client_id
+                ))
                 conn.commit()
                 print("Ticket creado exitosamente.")
     except Exception as e:
@@ -270,6 +287,33 @@ def show_all_tables():
     finally:
         release_connection(conn)
 
+def get_user_id_by_rut(rut):
+    """
+    Obtiene el ID de un usuario basado en su RUT desde la tabla 'Clients'.
+    """
+    query = "SELECT id FROM \"Clients\" WHERE rut = %s"
+    conn = None
+    try:
+        conn = get_connection()
+        if conn:
+            with conn.cursor() as cursor:
+                # Ejecutar la consulta para obtener el ID del usuario
+                cursor.execute(query, (rut,))
+                user = cursor.fetchone()
+
+                # Verificar si se encontró el usuario
+                if user:
+                    return user[0]  # Retorna el ID del usuario
+                else:
+                    print(f"No se encontró un usuario con el RUT {rut}.")
+                    return None  # Si no se encuentra el usuario, retorna None
+    except Exception as e:
+        print(f"Error al obtener el ID del usuario: {e}")
+        return None  # En caso de error, retorna None
+    finally:
+        release_connection(conn)
+
+
 # Función principal para probar la conexión y mostrar las tablas
 def main():
     conn = None
@@ -293,8 +337,8 @@ def main():
     # Mostrar tablas
     #show_all_tables()
     #show_first_5_records_per_table()
-    #validate_rut("20.404.282-9")
     show_tickets("20.404.282-9")
+    #print(get_user_id_by_rut("20.404.282-9"))
 # Ejecutar el script
 if __name__ == "__main__":
     main()
