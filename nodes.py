@@ -6,7 +6,7 @@ from langchain_core.messages.ai import AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 import dotenv, os
 import google.generativeai as genai
-from db import validate_rut, create_ticket, update_ticket
+from db import create_ticket, update_ticket
 
 # Cargar variables de entorno
 dotenv.load_dotenv()
@@ -65,36 +65,38 @@ def human_node(state: OrderState) -> OrderState:
         state["finished"] = True
     return state | {"messages": [("user", user_input)]}
 
-# Nodo de salida condicional
 def maybe_exit_human_node(state: OrderState) -> Literal["chatbot", "__end__"]:
+    """Decidir la próxima acción basada en la respuesta del usuario."""
     resolved = ["muchas gracias", "gracias", "solucionado", "resuelto"]
     unresolved = ["no me sirvió", "quiero hablar con un técnico", "no resuelto"]
     technical_question = ["pregunta técnica", "técnica", "cómo hago", "cómo funciona"]
 
-    # Validar si el RUT ya fue capturado
-    if "rut" not in state:
-        last_message = state["messages"][-1].content.lower()
-        if validate_rut(last_message):  # Validar RUT en la base de datos
-            state["rut"] = last_message
-            state["messages"].append(AIMessage(content="¡RUT válido! ¿En qué puedo ayudarte?"))
-            return "chatbot"
-        else:
-            state["messages"].append(AIMessage(content="RUT no válido. Intenta nuevamente."))
-            return "human"
+    if "rut" not in state or not state["rut"]:
+        state["rut"] = 12345678  # RUT de prueba
 
     user_message = state["messages"][-1].content.lower()
-
+    # Verificamos si el usuario quiere resolver el ticket
     if any(word in user_message for word in resolved):
+        # Crear un ticket con el estado 'Resuelto'
         create_ticket(state["rut"], "Problema resuelto", estado="Resuelto", asignacion="Chatbot")
         state["finished"] = True
         state["messages"].append(AIMessage(content="Ticket resuelto y guardado."))
-        return END
+        return END  # Finalizamos la interacción
+
+    # Si el usuario quiere escalar el ticket
     elif any(word in user_message for word in unresolved):
-        update_ticket(state["rut"], estado="Pendiente", asignacion="Técnico Nivel 2")
+        # Actualizar el ticket y asignarlo a un Técnico Nivel 2
+        update_ticket(state["rut"], estado="Pendiente", asignacion="Administrador")
         state["finished"] = True
         state["messages"].append(AIMessage(content="Ticket asignado a Técnico Nivel 2."))
-        return END
+        print("Ticket asignado a Técnico Nivel 2.")
+        return END  # Finalizamos la interacción
+
+    # Si el usuario tiene una pregunta técnica
     elif any(word in user_message for word in technical_question):
-        return "chatbot"
+        print("Usuario tiene una pregunta técnica, regresando al chatbot.")
+        return "chatbot"  # Si el usuario tiene una pregunta técnica, regresa al chatbot
+
     else:
-        return "chatbot"
+        print("Regresando al chatbot por defecto.")
+        return "chatbot"  # Para cualquier otra entrada, regresa al chatbot

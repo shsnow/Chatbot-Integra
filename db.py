@@ -72,61 +72,8 @@ def validate_rut(rut):
     finally:
         release_connection(conn)
 
-# Crear un ticket
-def create_ticket(rut, descripcion, estado="En progreso", asignacion="Chatbot"):
-    """Crea un nuevo ticket en la base de datos."""
-    query = """
-    INSERT INTO tickets (rut, descripcion_problema, estado_ticket, asignacion, fecha_creacion)
-    VALUES (%s, %s, %s, %s, %s)
-    """
-    conn = None
-    try:
-        conn = get_connection()
-        if conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, (rut, descripcion, estado, asignacion, datetime.now()))
-                conn.commit()
-    except Exception as e:
-        print(f"Error al crear el ticket: {e}")
-    finally:
-        release_connection(conn)
 
-# Actualizar un ticket
-def update_ticket(rut, estado, asignacion):
-    """Actualiza un ticket existente basado en el RUT."""
-    query = """
-    UPDATE tickets
-    SET estado_ticket = %s, asignacion = %s
-    WHERE rut = %s
-    """
-    conn = None
-    try:
-        conn = get_connection()
-        if conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, (estado, asignacion, rut))
-                conn.commit()
-    except Exception as e:
-        print(f"Error al actualizar el ticket: {e}")
-    finally:
-        release_connection(conn)
 
-# Listar tickets por RUT
-def get_tickets_by_rut(rut):
-    """Devuelve todos los tickets asociados a un RUT."""
-    query = "SELECT * FROM tickets WHERE rut = %s"
-    conn = None
-    try:
-        conn = get_connection()
-        if conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(query, (rut,))
-                return cursor.fetchall()
-    except Exception as e:
-        print(f"Error al obtener tickets por RUT: {e}")
-        return []
-    finally:
-        release_connection(conn)
 
 #funcion que muestra a los usuarios los tickets que tienen
 def show_tickets(rut):
@@ -138,6 +85,99 @@ def show_tickets(rut):
             print(f" - {ticket}")
     else:
         print(f"No se encontraron tickets asociados al RUT {rut}.")
+# Crear un ticket
+def create_ticket(rut, title, description, category_id, state_id, sla_id, asignacion="Chatbot"):
+    """Crea un nuevo ticket en la base de datos usando el clientId asociado al RUT."""
+    # Obtener el clientId correspondiente al RUT
+    query_client_id = "SELECT id FROM \"Clients\" WHERE rut = %s"
+    conn = None
+    try:
+        conn = get_connection()
+        if conn:
+            with conn.cursor() as cursor:
+                # Obtener el clientId basado en el RUT
+                cursor.execute(query_client_id, (rut,))
+                client = cursor.fetchone()
+                
+                if not client:
+                    print(f"No se encontró el RUT {rut} en la base de datos.")
+                    return
+                
+                client_id = client[0]  # Obtener el clientId
+                
+                # Crear el ticket utilizando el clientId
+                query_create_ticket = """
+                INSERT INTO "Tickets" (title, description, estado_ticket, asignacion, clientId, categoryId, stateId, slaId, createdAt, updatedAt)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(query_create_ticket, (title, description, "En progreso", asignacion, client_id, category_id, state_id, sla_id, datetime.now(), datetime.now()))
+                conn.commit()
+                print("Ticket creado exitosamente.")
+    except Exception as e:
+        print(f"Error al crear el ticket: {e}")
+    finally:
+        release_connection(conn)
+
+
+def update_ticket(rut, estado, asignacion, category_id, state_id, sla_id):
+    """Actualiza un ticket existente basado en el RUT, usando el clientId en lugar del RUT."""
+    # Obtener el clientId correspondiente al RUT
+    query_client_id = "SELECT id FROM \"Clients\" WHERE rut = %s"
+    query_update_ticket = """
+    UPDATE "Tickets"
+    SET estado_ticket = %s, asignacion = %s, categoryId = %s, stateId = %s, slaId = %s, updatedAt = %s
+    WHERE clientId = %s
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        if conn:
+            with conn.cursor() as cursor:
+                # Obtener el clientId basado en el RUT
+                cursor.execute(query_client_id, (rut,))
+                client = cursor.fetchone()
+                
+                if not client:
+                    print(f"No se encontró el RUT {rut} en la base de datos.")
+                    return
+                
+                client_id = client[0]  # Obtener el clientId
+                
+                # Actualizar el ticket usando el clientId
+                cursor.execute(query_update_ticket, (estado, asignacion, category_id, state_id, sla_id, datetime.now(), client_id))
+                conn.commit()
+                print(f"Ticket de cliente {rut} actualizado exitosamente.")
+    except Exception as e:
+        print(f"Error al actualizar el ticket: {e}")
+    finally:
+        release_connection(conn)
+
+
+def get_tickets_by_rut(rut):
+    """Devuelve todos los tickets asociados a un RUT desde la tabla 'Tickets'."""
+    query = """
+    SELECT t.* 
+    FROM "Tickets" t
+    JOIN "Clients" c ON t."clientId" = c.id  -- Unimos las tablas por clientId
+    WHERE c.rut = %s  -- Filtramos por el RUT del cliente
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        if conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(query, (rut,))
+                tickets = cursor.fetchall()
+                if tickets:
+                    return tickets  # Devuelve los tickets encontrados para el RUT
+                else:
+                    print(f"No se encontraron tickets asociados al RUT {rut}.")
+                    return []  # Si no hay tickets, devolver una lista vacía
+    except Exception as e:
+        print(f"Error al obtener tickets por RUT: {e}")
+        return []
+    finally:
+        release_connection(conn)
 
 
 def show_first_5_records_per_table():
@@ -188,12 +228,12 @@ def show_first_5_records_per_table():
                         cursor.execute(query_data)
                         records = cursor.fetchall()
 
-                        if records:
-                            print("Primeros 5 registros:")
-                            for record in records:
-                                print(record)
-                        else:
-                            print(" - Sin registros.")
+                        #if records:
+                        #    print("Primeros 5 registros:")
+                        #    for record in records:
+                        #        print(record)
+                        #else:
+                        #    print(" - Sin registros.")
                     except Exception as e:
                         print(f"Error al obtener datos de la tabla '{table_name}': {e}")
                         conn.rollback()  # Reiniciar la transacción después de un error
@@ -251,9 +291,10 @@ def main():
         release_connection(conn)
 
     # Mostrar tablas
-    show_all_tables()
-    show_first_5_records_per_table()
-    validate_rut("20.404.282-9")
+    #show_all_tables()
+    #show_first_5_records_per_table()
+    #validate_rut("20.404.282-9")
+    show_tickets("20.404.282-9")
 # Ejecutar el script
 if __name__ == "__main__":
     main()

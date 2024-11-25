@@ -3,3 +3,4 @@
 
 #ignorar los archivos de la carpeta __pycache__
 __pycache__/
+db1.py

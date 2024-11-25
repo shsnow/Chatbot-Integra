@@ -13,25 +13,22 @@ if "rut" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
-# Vista para ingresar el RUT si no está definido
+# Solicitar el RUT si no está definido
 if not st.session_state["rut"]:
-    # Solicitamos el RUT al usuario
     rut_input = st.text_input("Por favor, ingresa tu RUT:")
     
-    # Validamos el RUT
     if rut_input:
         try:
             if validate_rut(rut_input):  # Si el RUT es válido
                 st.session_state["rut"] = rut_input  # Guardamos el RUT
                 st.success("¡RUT válido! Puedes continuar al chat.")
-                st.rerun()  # Esto recarga la página y pasa al chat
+                st.experimental_rerun()  # Esto recarga la página y pasa al chat
             else:
                 st.error("RUT no válido. Intenta nuevamente.")
         except Exception as e:
             st.error(f"Error al validar el RUT: {e}")
 else:
     # Si el RUT está validado, mostrar el chat
-    # Mostrar mensajes anteriores
     for msg in st.session_state["messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -41,7 +38,6 @@ else:
     
     if prompt:
         # Limitar el número de mensajes para enviar al modelo
-        # Solo enviamos los últimos 5 mensajes para evitar sobrecargar el modelo
         st.session_state["messages"].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -59,6 +55,8 @@ else:
                         "chat_history": chat_history,
                         "rut": st.session_state["rut"]  # Pasar el RUT al chatbot
                     })
+
+                    # Obtener la respuesta y mostrarla
                     reply = response.get("answer", "Lo siento, no pude procesar tu solicitud.")
                     st.markdown(reply)
                     st.session_state["messages"].append({"role": "assistant", "content": reply})
@@ -69,4 +67,4 @@ else:
                     st.session_state["messages"].append({"role": "assistant", "content": error_msg})
 
     # Refrescar la interfaz
-    st.rerun()
+    st.experimental_rerun()  # Esto recarga la página para reflejar el estado actualizado
